@@ -1,0 +1,45 @@
+package helpers
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/Bachry28/task-5-pbi-btpns-Muhammad-Bachry-Alhady/database"
+	"github.com/Bachry28/task-5-pbi-btpns-Muhammad-Bachry-Alhady/models"
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+)
+
+func Auth(c *gin.Context) {
+	tokenString, err := c.Cookie("Authorization")
+
+	if err != nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+	}
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(os.Getenv("SECRET")), nil
+	})
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if float64(time.Now().Unix()) > claims["exp"].(float64) {
+			c.AbortWithStatus(http.StatusUnauthorized)
+		}
+
+		var user models.User
+
+		database.Database.Where("id = ?", claims["sub"]).First(&user)
+		c.Set("user_id", user.ID)
+	}
+
+	if err != nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+	}
+
+	c.Next()
+}
